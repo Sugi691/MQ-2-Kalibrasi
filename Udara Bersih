@@ -1,0 +1,60 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+#define RL 10
+float Analog_value=0;
+float VRL=0;
+float Rs=0;
+float Ro=0;
+
+const char* ssid = "OPPO";// SSID wifi
+const char* password = "Azril123";// Password wifi
+
+// URL dari Apps Script
+String serverName = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"; 
+
+void setup(){
+  pinMode(32, INPUT);
+  Serial.begin(115200);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Menghubungkan ke WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Tersambung!");
+}
+
+void loop(){
+  Analog_value= analogRead(32);
+  VRL= Analog_value*(3.3/4095.0);
+  Rs= ((3.3/VRL)-1)*RL;
+  Ro= Rs/9.8;
+
+  Serial.print("Ro di udara bersih = ");
+  Serial.println(Ro);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/json");
+
+    // bikin JSON untuk dikirim
+    String payload = "{";
+    payload += "\"Analog_value\":" + String(Analog_value) + ",";
+    payload += "\"VRL\":" + String(VRL,3) + ",";
+    payload += "\"Rs\":" + String(Rs,3) + ",";
+    payload += "\"Ro\":" + String(Ro,3);
+    payload += "}";
+
+    int httpResponseCode = http.POST(payload);
+
+    Serial.print("Response: ");
+    Serial.println(httpResponseCode);
+
+    http.end();
+  }
+
+  delay(5000); // kirim tiap 5 detik
+}
