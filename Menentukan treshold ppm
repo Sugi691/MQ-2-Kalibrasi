@@ -1,0 +1,81 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+#define RL 10.0          // resistor load 10k
+#define MQ_sensor 32     // pin ADC ESP32
+#define Ro 27.4           // hasil kalibrasi
+
+// Konstanta hasil regresi (contoh untuk Smoke)
+#define m -0.82593
+#define b 2.74904
+
+// Ganti dengan WiFi kamu
+const char* ssid = "OPPO";
+const char* password = "Azril123";
+
+// URL dari Google Apps Script
+String serverName = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
+
+float VRL;
+float Rs;
+float ratio;
+float ppm;
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Menghubungkan ke WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi tersambung!");
+}
+
+void loop() {
+  // --- Pembacaan sensor ---
+  int adcValue = analogRead(MQ_sensor);
+  VRL = adcValue * (3.3 / 4095.0);
+  
+  if (VRL <= 0.01) {
+    Serial.println("Tegangan terlalu kecil, cek koneksi sensor!");
+    delay(5000);
+    return;
+  }
+
+  Rs = RL * ((3.3 / VRL) - 1);
+  ratio = Rs / Ro;
+  ppm = pow(10, ((log10(ratio) - b) / m));
+
+  // --- Cetak ke Serial ---
+  Serial.print("VRL = "); Serial.print(VRL, 3);
+  Serial.print(" V | Rs/Ro = "); Serial.print(ratio, 3);
+  Serial.print(" | Smoke = "); Serial.print(ppm, 2);
+  Serial.println(" ppm");
+
+  // --- Kirim ke Google Sheet ---
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/json");
+
+    // JSON data
+    String payload = "{";
+    payload += "\"VRL\":" + String(VRL,3) + ",";
+    payload += "\"Rs\":" + String(Rs,3) + ",";
+    payload += "\"Ratio\":" + String(ratio,3) + ",";
+    payload += "\"PPM\":" + String(ppm,2);
+    payload += "}";
+
+    int httpResponseCode = http.POST(payload);
+    Serial.print("Response Google Script: ");
+    Serial.println(httpResponseCode);
+
+    http.end();
+  }
+
+  delay(5000); // kirim tiap 5 detik
+}
+
